@@ -24,14 +24,14 @@ it('reads data and posts when token exists', async () => {
   mockRead.mockResolvedValue({ date: '2026-08-24', weight_kg: 80.5 });
   mockPost.mockResolvedValue(undefined);
   const result = await runSync();
-  expect(result).toBe('success');
+  expect(result).toMatchObject({ status: 'success', hcFields: 1 });
   expect(mockPost).toHaveBeenCalledWith('valid-token', { date: '2026-08-24', weight_kg: 80.5 });
 });
 
 it('returns no-token when token not set', async () => {
   mockGetToken.mockResolvedValue(null);
   const result = await runSync();
-  expect(result).toBe('no-token');
+  expect(result).toMatchObject({ status: 'no-token' });
   expect(mockPost).not.toHaveBeenCalled();
 });
 
@@ -40,5 +40,5 @@ it('returns error when API call fails', async () => {
   mockRead.mockResolvedValue({ date: '2026-08-24' });
   mockPost.mockRejectedValue(new Error('network error'));
   const result = await runSync();
-  expect(result).toBe('error');
+  expect(result).toMatchObject({ status: 'error', message: 'network error' });
 });
