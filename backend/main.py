@@ -2,6 +2,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from routers.sync import router as sync_router
+from routers.telegram_webhook import router as telegram_router
 from cron import setup_scheduler
 
 @asynccontextmanager
@@ -13,6 +14,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="BotSalud", lifespan=lifespan)
 app.include_router(sync_router)
+app.include_router(telegram_router)
 
 @app.get("/health")
 async def health():
