@@ -30,6 +30,7 @@ export default function SetupScreen() {
   const [savedToken, setSavedToken] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
+  const [requestingPerms, setRequestingPerms] = useState(false);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
@@ -89,6 +90,23 @@ export default function SetupScreen() {
       }
     } catch (e) {
       Alert.alert('Error', 'No se pudo guardar la configuración. Intenta de nuevo.');
+    }
+  };
+
+  const handleRequestPermissions = async () => {
+    setRequestingPerms(true);
+    try {
+      const isAvailable = await initialize();
+      if (!isAvailable) {
+        Alert.alert('Health Connect no disponible', 'Instala la app Health Connect desde Play Store.');
+        return;
+      }
+      await requestPermission(PERMISSIONS);
+      Alert.alert('Listo', 'Permisos de Health Connect concedidos. Ahora sincroniza para enviar tus datos.');
+    } catch (e) {
+      Alert.alert('Error', 'No se pudieron conceder los permisos. Intenta de nuevo.');
+    } finally {
+      setRequestingPerms(false);
     }
   };
 
@@ -154,6 +172,17 @@ export default function SetupScreen() {
             </View>
 
             <TouchableOpacity
+              style={[styles.buttonSecondary, requestingPerms && styles.buttonDisabled]}
+              onPress={handleRequestPermissions}
+              disabled={requestingPerms}
+            >
+              {requestingPerms
+                ? <ActivityIndicator color="#00E5A0" />
+                : <Text style={styles.buttonSecondaryText}>Conceder permisos Health Connect</Text>
+              }
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.button, syncing && styles.buttonDisabled]}
               onPress={handleSync}
               disabled={syncing}
@@ -210,4 +239,9 @@ const styles = StyleSheet.create({
   statusDesc: { color: '#666', fontSize: 13, lineHeight: 20 },
   tokenText: { color: '#888', fontFamily: 'monospace', fontSize: 12 },
   syncResult: { color: '#888', textAlign: 'center', fontSize: 13, marginTop: 8 },
+  buttonSecondary: {
+    backgroundColor: 'transparent', borderRadius: 14, padding: 16,
+    alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#00E5A0',
+  },
+  buttonSecondaryText: { color: '#00E5A0', fontWeight: '700', fontSize: 15 },
 });
