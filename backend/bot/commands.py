@@ -2,7 +2,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from services.health_data import (
-    get_user_by_telegram_id, create_user, update_objective, get_snapshots_range
+    get_user_by_telegram_id, create_user, update_objective, get_snapshots_range, request_sync
 )
 from services.ai_service import generate_report
 from datetime import date, timedelta
@@ -73,6 +73,19 @@ async def reporte_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
     header = f"*📋 Reporte — {end.strftime('%d %b %Y')}*\n\n"
     await update.message.reply_text(header + report_text, parse_mode="Markdown")
+
+async def sincronizar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    telegram_id = update.effective_user.id
+    user = get_user_by_telegram_id(telegram_id)
+    if not user:
+        await update.message.reply_text("Usa /start primero.")
+        return
+    request_sync(user["id"])
+    await update.message.reply_text(
+        "📲 Sincronización solicitada.\n\n"
+        "Abre la app BotSalud en tu teléfono — los datos se enviarán automáticamente.",
+        parse_mode="Markdown"
+    )
 
 async def semana_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     telegram_id = update.effective_user.id

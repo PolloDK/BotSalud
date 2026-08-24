@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  SafeAreaView, ActivityIndicator, Alert, ScrollView,
+  SafeAreaView, ActivityIndicator, Alert, ScrollView, AppState,
 } from 'react-native';
 import { initialize, requestPermission } from 'react-native-health-connect';
 import { getToken, saveToken } from '../storage';
 import { configureBackgroundSync } from '../backgroundTask';
 import { runSync } from '../services/sync';
+import { checkSyncPending } from '../services/api';
 
 type Status = 'loading' | 'unconfigured' | 'configured';
 
@@ -29,12 +30,34 @@ export default function SetupScreen() {
   const [savedToken, setSavedToken] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     getToken().then((t) => {
       if (t) { setSavedToken(t); setStatus('configured'); }
       else setStatus('unconfigured');
     });
+  }, []);
+
+  // Auto-sync when app comes to foreground if /sincronizar was requested from Telegram
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        const token = await getToken();
+        if (!token) return;
+        try {
+          const pending = await checkSyncPending(token);
+          if (pending) {
+            setSyncing(true);
+            const result = await runSync();
+            setLastSyncResult(result === 'success' ? '✅ Sincronizado' : '❌ Error al sincronizar');
+            setSyncing(false);
+          }
+        } catch { /* network error, ignore */ }
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
   }, []);
 
   const handleActivate = async () => {

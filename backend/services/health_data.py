@@ -52,3 +52,18 @@ def get_recent_messages(user_id: str, limit: int = 10) -> list:
         .execute()
         .data[::-1]
     )
+
+def request_sync(user_id: str) -> None:
+    from datetime import datetime, timezone
+    get_db().table("users").update(
+        {"sync_requested_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", user_id).execute()
+
+def clear_sync_request(user_id: str) -> None:
+    get_db().table("users").update(
+        {"sync_requested_at": None}
+    ).eq("id", user_id).execute()
+
+def is_sync_pending(user_id: str) -> bool:
+    result = get_db().table("users").select("sync_requested_at").eq("id", user_id).single().execute()
+    return bool(result.data and result.data.get("sync_requested_at"))

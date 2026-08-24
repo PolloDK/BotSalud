@@ -3,7 +3,7 @@ from fastapi import APIRouter, Request, HTTPException, Header
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from config import settings
-from bot.commands import start_command, objetivo_command, reporte_command, semana_command
+from bot.commands import start_command, objetivo_command, reporte_command, semana_command, sincronizar_command
 from bot.handlers import message_handler
 
 router = APIRouter()
@@ -14,6 +14,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("objetivo", objetivo_command))
     app.add_handler(CommandHandler("reporte", reporte_command))
     app.add_handler(CommandHandler("semana", semana_command))
+    app.add_handler(CommandHandler("sincronizar", sincronizar_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     return app
 

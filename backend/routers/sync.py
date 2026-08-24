@@ -1,7 +1,7 @@
 # backend/routers/sync.py
 from fastapi import APIRouter, HTTPException, Header
 from models import HealthSyncPayload
-from services.health_data import get_user_by_token, upsert_snapshot
+from services.health_data import get_user_by_token, upsert_snapshot, is_sync_pending, clear_sync_request
 
 router = APIRouter()
 
@@ -17,4 +17,17 @@ async def sync_health_data(
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
     upsert_snapshot(user["id"], payload)
+    clear_sync_request(user["id"])
     return {"status": "ok"}
+
+@router.get("/sync/pending")
+async def check_sync_pending(
+    authorization: str | None = Header(default=None)
+):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing auth token")
+    token = authorization.removeprefix("Bearer ")
+    user = get_user_by_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return {"pending": is_sync_pending(user["id"])}

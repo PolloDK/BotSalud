@@ -26,3 +26,10 @@ export const syncHealthData = (token: string, payload: HealthPayload): Promise<v
   axios.post(`${BASE_URL}/sync`, payload, {
     headers: { Authorization: `Bearer ${token}` },
   });
+
+export const checkSyncPending = async (token: string): Promise<boolean> => {
+  const res = await axios.get(`${BASE_URL}/sync/pending`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data.pending === true;
+};
