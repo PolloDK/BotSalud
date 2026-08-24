@@ -1,0 +1,96 @@
+import { initialize, readRecords } from 'react-native-health-connect';
+import type { HealthPayload } from './api';
+
+const yesterday = (): { start: string; end: string; date: string } => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  d.setHours(0, 0, 0, 0);
+  const start = d.toISOString();
+  d.setHours(23, 59, 59, 999);
+  const end = d.toISOString();
+  const date = start.slice(0, 10);
+  return { start, end, date };
+};
+
+const avg = (nums: number[]): number | undefined =>
+  nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : undefined;
+
+const sum = (nums: number[]): number | undefined =>
+  nums.length ? nums.reduce((a, b) => a + b, 0) : undefined;
+
+export const readYesterdayData = async (): Promise<HealthPayload> => {
+  await initialize();
+  const { start, end, date } = yesterday();
+  const timeRangeFilter = { operator: 'between' as const, startTime: start, endTime: end };
+
+  const [
+    weightRecs, bodyFatRecs, leanMassRecs,
+    stepsRecs, activeCalRecs, totalCalRecs,
+    restingHRRecs, sleepRecs, exerciseRecs, nutritionRecs,
+  ] = await Promise.all([
+    readRecords('Weight', { timeRangeFilter }),
+    readRecords('BodyFat', { timeRangeFilter }),
+    readRecords('LeanBodyMass', { timeRangeFilter }),
+    readRecords('Steps', { timeRangeFilter }),
+    readRecords('ActiveCaloriesBurned', { timeRangeFilter }),
+    readRecords('TotalCaloriesBurned', { timeRangeFilter }),
+    readRecords('RestingHeartRate', { timeRangeFilter }),
+    readRecords('SleepSession', { timeRangeFilter }),
+    readRecords('ExerciseSession', { timeRangeFilter }),
+    readRecords('Nutrition', { timeRangeFilter }),
+  ]);
+
+  const payload: HealthPayload = { date };
+
+  const weights = weightRecs.records.map((r: any) => r.weight?.inKilograms).filter(Boolean);
+  if (weights.length) payload.weight_kg = avg(weights);
+
+  const fats = bodyFatRecs.records.map((r: any) => r.percentage).filter(Boolean);
+  if (fats.length) payload.body_fat_pct = avg(fats);
+
+  const lean = leanMassRecs.records.map((r: any) => r.mass?.inKilograms).filter(Boolean);
+  if (lean.length) payload.lean_mass_kg = avg(lean);
+
+  const steps = stepsRecs.records.map((r: any) => r.count).filter(Boolean);
+  payload.steps = sum(steps);
+
+  const activeCal = activeCalRecs.records.map((r: any) => r.energy?.inKilocalories).filter(Boolean);
+  payload.active_cal = sum(activeCal) ? Math.round(sum(activeCal)!) : undefined;
+
+  const totalCal = totalCalRecs.records.map((r: any) => r.energy?.inKilocalories).filter(Boolean);
+  payload.total_cal = sum(totalCal) ? Math.round(sum(totalCal)!) : undefined;
+
+  const hr = restingHRRecs.records.map((r: any) => r.beatsPerMinute).filter(Boolean);
+  if (hr.length) payload.resting_hr = Math.round(avg(hr)!);
+
+  if (sleepRecs.records.length) {
+    const totalMs = sleepRecs.records.reduce((acc: number, r: any) => {
+      return acc + (new Date(r.endTime).getTime() - new Date(r.startTime).getTime());
+    }, 0);
+    payload.sleep_hours = Math.round((totalMs / 3600000) * 10) / 10;
+  }
+
+  if (exerciseRecs.records.length) {
+    payload.workout_count = exerciseRecs.records.length;
+    const totalExerciseMs = exerciseRecs.records.reduce((acc: number, r: any) => {
+      return acc + (new Date(r.endTime).getTime() - new Date(r.startTime).getTime());
+    }, 0);
+    payload.workout_minutes = Math.round(totalExerciseMs / 60000);
+  }
+
+  if (nutritionRecs.records.length) {
+    const cals = nutritionRecs.records.map((r: any) => r.energy?.inKilocalories || 0);
+    const prot = nutritionRecs.records.map((r: any) => r.protein?.inGrams || 0);
+    const carbs = nutritionRecs.records.map((r: any) => r.totalCarbohydrate?.inGrams || 0);
+    const fat = nutritionRecs.records.map((r: any) => r.totalFat?.inGrams || 0);
+    const totalCalsIn = cals.reduce((a: number, b: number) => a + b, 0);
+    if (totalCalsIn > 0) {
+      payload.calories_in = Math.round(totalCalsIn);
+      payload.protein_g = Math.round(prot.reduce((a: number, b: number) => a + b, 0) * 10) / 10;
+      payload.carbs_g = Math.round(carbs.reduce((a: number, b: number) => a + b, 0) * 10) / 10;
+      payload.fat_g = Math.round(fat.reduce((a: number, b: number) => a + b, 0) * 10) / 10;
+    }
+  }
+
+  return payload;
+};
