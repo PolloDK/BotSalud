@@ -1,15 +1,13 @@
 import { initialize, readRecords } from 'react-native-health-connect';
 import type { HealthPayload } from './api';
 
-const yesterday = (): { start: string; end: string; date: string } => {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  d.setHours(0, 0, 0, 0);
-  const start = d.toISOString();
-  d.setHours(23, 59, 59, 999);
-  const end = d.toISOString();
-  const date = start.slice(0, 10);
-  return { start, end, date };
+// Read the last 48h so we catch data synced today AND yesterday
+const recentWindow = (): { start: string; end: string; date: string } => {
+  const end = new Date();
+  const start = new Date(end.getTime() - 48 * 60 * 60 * 1000);
+  start.setHours(0, 0, 0, 0);
+  const date = new Date().toISOString().slice(0, 10);
+  return { start: start.toISOString(), end: end.toISOString(), date };
 };
 
 const avg = (nums: number[]): number | undefined =>
@@ -20,7 +18,7 @@ const sum = (nums: number[]): number | undefined =>
 
 export const readYesterdayData = async (): Promise<HealthPayload> => {
   await initialize();
-  const { start, end, date } = yesterday();
+  const { start, end, date } = recentWindow();
   const timeRangeFilter = { operator: 'between' as const, startTime: start, endTime: end };
 
   const [
