@@ -7,6 +7,7 @@ import { initialize, requestPermission } from 'react-native-health-connect';
 import { getToken, saveToken } from '../storage';
 import { configureBackgroundSync } from '../backgroundTask';
 import { runSync } from '../services/sync';
+import { checkGrantedPermissions } from '../services/healthConnect';
 import { checkSyncPending } from '../services/api';
 
 type Status = 'loading' | 'unconfigured' | 'configured';
@@ -24,34 +25,47 @@ const PERMISSIONS = [
   { accessType: 'read', recordType: 'Nutrition' },
 ];
 
+const REQUIRED_TYPES = PERMISSIONS.map(p => p.recordType);
+
 export default function SetupScreen() {
   const [status, setStatus] = useState<Status>('loading');
   const [token, setToken] = useState('');
   const [savedToken, setSavedToken] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const [lastSyncResult, setLastSyncResult] = useState<string | null>(null);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [requestingPerms, setRequestingPerms] = useState(false);
+  const [grantedPerms, setGrantedPerms] = useState<string[] | null>(null);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     getToken().then((t) => {
-      if (t) { setSavedToken(t); setStatus('configured'); }
+      if (t) { setSavedToken(t); setStatus('configured'); refreshPerms(); }
       else setStatus('unconfigured');
     });
   }, []);
+
+  const refreshPerms = async () => {
+    try {
+      const granted = await checkGrantedPermissions();
+      setGrantedPerms(granted);
+    } catch {
+      setGrantedPerms([]);
+    }
+  };
 
   // Auto-sync when app comes to foreground if /sincronizar was requested from Telegram
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (nextState) => {
       if (appState.current.match(/inactive|background/) && nextState === 'active') {
-        const token = await getToken();
-        if (!token) return;
+        refreshPerms();
+        const tok = await getToken();
+        if (!tok) return;
         try {
-          const pending = await checkSyncPending(token);
+          const pending = await checkSyncPending(tok);
           if (pending) {
             setSyncing(true);
             const result = await runSync();
-            setLastSyncResult(result === 'success' ? '✅ Sincronizado' : '❌ Error al sincronizar');
+            setSyncMsg(formatSyncMsg(result));
             setSyncing(false);
           }
         } catch { /* network error, ignore */ }
@@ -61,34 +75,38 @@ export default function SetupScreen() {
     return () => sub.remove();
   }, []);
 
+  const formatSyncMsg = (result: any): string => {
+    if (result.status === 'success') {
+      const fields = result.hcFields ?? 0;
+      const hcErr = result.hcError ? ` (HC error: ${result.hcError})` : '';
+      return fields > 0
+        ? `✅ Sincronizado — ${fields} métricas enviadas`
+        : `⚠️ Sincronizado sin datos de Health Connect${hcErr}`;
+    }
+    if (result.status === 'no-token') return '❌ Token no configurado';
+    return `❌ Error: ${result.message ?? 'desconocido'}`;
+  };
+
   const handleActivate = async () => {
     if (!token.trim()) {
       Alert.alert('Token requerido', 'Pega el token que te dio el bot en Telegram.');
       return;
     }
     try {
-      // Save token first so app doesn't crash before persisting state
       await saveToken(token.trim());
       setSavedToken(token.trim());
       setStatus('configured');
 
-      // Request Health Connect permissions (may open system dialog)
       try {
         const isAvailable = await initialize();
         if (isAvailable) {
-          await requestPermission(PERMISSIONS);
+          await requestPermission(PERMISSIONS as any);
+          await refreshPerms();
         }
-      } catch (permErr) {
-        // Permissions failed but token is already saved — app still works
-      }
+      } catch {}
 
-      // Register background sync
-      try {
-        await configureBackgroundSync();
-      } catch (bgErr) {
-        // Background fetch registration failed — sync can be triggered manually
-      }
-    } catch (e) {
+      try { await configureBackgroundSync(); } catch {}
+    } catch {
       Alert.alert('Error', 'No se pudo guardar la configuración. Intenta de nuevo.');
     }
   };
@@ -98,13 +116,13 @@ export default function SetupScreen() {
     try {
       const isAvailable = await initialize();
       if (!isAvailable) {
-        Alert.alert('Health Connect no disponible', 'Instala la app Health Connect desde Play Store.');
+        Alert.alert('Health Connect no disponible', 'Instala Health Connect desde Play Store.');
         return;
       }
-      await requestPermission(PERMISSIONS);
-      Alert.alert('Listo', 'Permisos de Health Connect concedidos. Ahora sincroniza para enviar tus datos.');
-    } catch (e) {
-      Alert.alert('Error', 'No se pudieron conceder los permisos. Intenta de nuevo.');
+      await requestPermission(PERMISSIONS as any);
+      await refreshPerms();
+    } catch (e: any) {
+      Alert.alert('Error', `No se pudieron conceder los permisos: ${e?.message ?? String(e)}`);
     } finally {
       setRequestingPerms(false);
     }
@@ -112,10 +130,14 @@ export default function SetupScreen() {
 
   const handleSync = async () => {
     setSyncing(true);
+    setSyncMsg(null);
     const result = await runSync();
-    setLastSyncResult(result === 'success' ? '✅ Sincronizado correctamente' : '❌ Error al sincronizar');
+    setSyncMsg(formatSyncMsg(result));
     setSyncing(false);
   };
+
+  const grantedCount = grantedPerms?.filter(t => REQUIRED_TYPES.includes(t)).length ?? 0;
+  const allGranted = grantedCount >= REQUIRED_TYPES.length;
 
   if (status === 'loading') {
     return (
@@ -166,6 +188,22 @@ export default function SetupScreen() {
               </Text>
             </View>
 
+            {/* Permissions status */}
+            {grantedPerms !== null && (
+              <View style={[styles.permCard, allGranted ? styles.permCardOk : styles.permCardWarn]}>
+                <Text style={[styles.permTitle, allGranted ? styles.permTitleOk : styles.permTitleWarn]}>
+                  {allGranted
+                    ? `✅ Permisos OK (${grantedCount}/${REQUIRED_TYPES.length})`
+                    : `⚠️ Permisos incompletos (${grantedCount}/${REQUIRED_TYPES.length})`}
+                </Text>
+                {!allGranted && (
+                  <Text style={styles.permDesc}>
+                    Faltan permisos de Health Connect. Presiona "Conceder permisos" para activarlos.
+                  </Text>
+                )}
+              </View>
+            )}
+
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Token</Text>
               <Text style={styles.tokenText} numberOfLines={1}>{savedToken}</Text>
@@ -193,8 +231,10 @@ export default function SetupScreen() {
               }
             </TouchableOpacity>
 
-            {lastSyncResult && (
-              <Text style={styles.syncResult}>{lastSyncResult}</Text>
+            {syncMsg && (
+              <Text style={[styles.syncResult, syncMsg.startsWith('✅') ? styles.syncOk : syncMsg.startsWith('⚠️') ? styles.syncWarn : styles.syncErr]}>
+                {syncMsg}
+              </Text>
             )}
           </View>
         )}
@@ -238,7 +278,19 @@ const styles = StyleSheet.create({
   statusText: { color: '#00E5A0', fontWeight: '700', fontSize: 15 },
   statusDesc: { color: '#666', fontSize: 13, lineHeight: 20 },
   tokenText: { color: '#888', fontFamily: 'monospace', fontSize: 12 },
-  syncResult: { color: '#888', textAlign: 'center', fontSize: 13, marginTop: 8 },
+  permCard: {
+    borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1,
+  },
+  permCardOk: { backgroundColor: '#0D1F1A', borderColor: '#00E5A030' },
+  permCardWarn: { backgroundColor: '#1F1500', borderColor: '#FF990030' },
+  permTitle: { fontWeight: '700', fontSize: 14, marginBottom: 4 },
+  permTitleOk: { color: '#00E5A0' },
+  permTitleWarn: { color: '#FF9900' },
+  permDesc: { color: '#999', fontSize: 13, lineHeight: 18 },
+  syncResult: { textAlign: 'center', fontSize: 13, marginTop: 8, lineHeight: 20 },
+  syncOk: { color: '#00E5A0' },
+  syncWarn: { color: '#FF9900' },
+  syncErr: { color: '#FF4444' },
   buttonSecondary: {
     backgroundColor: 'transparent', borderRadius: 14, padding: 16,
     alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#00E5A0',

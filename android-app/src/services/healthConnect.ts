@@ -1,4 +1,4 @@
-import { initialize, readRecords } from 'react-native-health-connect';
+import { initialize, readRecords, getGrantedPermissions } from 'react-native-health-connect';
 import type { HealthPayload } from './api';
 
 // Read the last 48h so we catch data synced today AND yesterday
@@ -15,6 +15,12 @@ const avg = (nums: number[]): number | undefined =>
 
 const sum = (nums: number[]): number | undefined =>
   nums.length ? nums.reduce((a, b) => a + b, 0) : undefined;
+
+export const checkGrantedPermissions = async (): Promise<string[]> => {
+  await initialize();
+  const granted = await getGrantedPermissions();
+  return granted.map((p: any) => p.recordType);
+};
 
 export const readYesterdayData = async (): Promise<HealthPayload> => {
   await initialize();
