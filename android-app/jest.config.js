@@ -5,5 +5,6 @@ module.exports = {
     'react-native-background-fetch': '<rootDir>/__mocks__/react-native-background-fetch.js',
     '@react-native-async-storage/async-storage':
       '<rootDir>/__mocks__/async-storage.js',
+    'react-native-ota-hot-update': '<rootDir>/__mocks__/react-native-ota-hot-update.js',
   },
 };
