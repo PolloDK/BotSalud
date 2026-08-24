@@ -43,14 +43,29 @@ export default function SetupScreen() {
       return;
     }
     try {
-      await initialize();
-      await requestPermission(PERMISSIONS);
+      // Save token first so app doesn't crash before persisting state
       await saveToken(token.trim());
-      await configureBackgroundSync();
       setSavedToken(token.trim());
       setStatus('configured');
+
+      // Request Health Connect permissions (may open system dialog)
+      try {
+        const isAvailable = await initialize();
+        if (isAvailable) {
+          await requestPermission(PERMISSIONS);
+        }
+      } catch (permErr) {
+        // Permissions failed but token is already saved — app still works
+      }
+
+      // Register background sync
+      try {
+        await configureBackgroundSync();
+      } catch (bgErr) {
+        // Background fetch registration failed — sync can be triggered manually
+      }
     } catch (e) {
-      Alert.alert('Error', 'No se pudo activar. Revisa los permisos de Health Connect.');
+      Alert.alert('Error', 'No se pudo guardar la configuración. Intenta de nuevo.');
     }
   };
 
