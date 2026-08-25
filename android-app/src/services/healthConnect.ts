@@ -22,6 +22,14 @@ export const checkGrantedPermissions = async (): Promise<string[]> => {
   return granted.map((p: any) => p.recordType);
 };
 
+const safeRead = async (type: string, filter: any): Promise<{ records: any[] }> => {
+  try {
+    return await readRecords(type as any, { timeRangeFilter: filter });
+  } catch {
+    return { records: [] };
+  }
+};
+
 export const readYesterdayData = async (): Promise<HealthPayload> => {
   await initialize();
   const { start, end, date } = recentWindow();
@@ -32,16 +40,16 @@ export const readYesterdayData = async (): Promise<HealthPayload> => {
     stepsRecs, activeCalRecs, totalCalRecs,
     restingHRRecs, sleepRecs, exerciseRecs, nutritionRecs,
   ] = await Promise.all([
-    readRecords('Weight', { timeRangeFilter }),
-    readRecords('BodyFat', { timeRangeFilter }),
-    readRecords('LeanBodyMass', { timeRangeFilter }),
-    readRecords('Steps', { timeRangeFilter }),
-    readRecords('ActiveCaloriesBurned', { timeRangeFilter }),
-    readRecords('TotalCaloriesBurned', { timeRangeFilter }),
-    readRecords('RestingHeartRate', { timeRangeFilter }),
-    readRecords('SleepSession', { timeRangeFilter }),
-    readRecords('ExerciseSession', { timeRangeFilter }),
-    readRecords('Nutrition', { timeRangeFilter }),
+    safeRead('Weight', timeRangeFilter),
+    safeRead('BodyFat', timeRangeFilter),
+    safeRead('LeanBodyMass', timeRangeFilter),
+    safeRead('Steps', timeRangeFilter),
+    safeRead('ActiveCaloriesBurned', timeRangeFilter),
+    safeRead('TotalCaloriesBurned', timeRangeFilter),
+    safeRead('RestingHeartRate', timeRangeFilter),
+    safeRead('SleepSession', timeRangeFilter),
+    safeRead('ExerciseSession', timeRangeFilter),
+    safeRead('Nutrition', timeRangeFilter),
   ]);
 
   const payload: HealthPayload = { date };
