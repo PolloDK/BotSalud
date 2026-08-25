@@ -12,8 +12,8 @@ class MainActivity : ReactActivity() {
   override fun getMainComponentName(): String = "BotSaludApp"
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
     HealthConnectPermissionDelegate.setPermissionDelegate(this)
+    super.onCreate(savedInstanceState)
   }
 
   override fun createReactActivityDelegate(): ReactActivityDelegate =
