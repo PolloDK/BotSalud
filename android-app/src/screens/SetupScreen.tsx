@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  SafeAreaView, ActivityIndicator, Alert, ScrollView, AppState,
+  SafeAreaView, ActivityIndicator, Alert, ScrollView, AppState, NativeModules,
 } from 'react-native';
+
+const { HealthConnectSettings } = NativeModules;
 import { initialize, requestPermission } from 'react-native-health-connect';
 import { getToken, saveToken } from '../storage';
 import { configureBackgroundSync } from '../backgroundTask';
@@ -220,6 +222,18 @@ export default function SetupScreen() {
               }
             </TouchableOpacity>
 
+            {!allGranted && (
+              <TouchableOpacity
+                style={styles.buttonOutline}
+                onPress={() => {
+                  HealthConnectSettings?.openPermissions?.();
+                  setTimeout(refreshPerms, 3000);
+                }}
+              >
+                <Text style={styles.buttonOutlineText}>Abrir configuración de permisos</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[styles.button, syncing && styles.buttonDisabled]}
               onPress={handleSync}
@@ -296,4 +310,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#00E5A0',
   },
   buttonSecondaryText: { color: '#00E5A0', fontWeight: '700', fontSize: 15 },
+  buttonOutline: {
+    backgroundColor: 'transparent', borderRadius: 14, padding: 14,
+    alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#444',
+  },
+  buttonOutlineText: { color: '#888', fontWeight: '600', fontSize: 14 },
 });
