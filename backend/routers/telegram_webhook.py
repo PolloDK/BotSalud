@@ -3,7 +3,10 @@ from fastapi import APIRouter, Request, HTTPException, Header
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from config import settings
-from bot.commands import start_command, objetivo_command, reporte_command, semana_command, sincronizar_command
+from bot.commands import (
+    start_command, objetivo_command, reporte_command, semana_command,
+    sincronizar_command, hoy_command, entrenos_command, grafico_command,
+)
 from bot.handlers import message_handler
 
 router = APIRouter()
@@ -12,6 +15,9 @@ def build_application() -> Application:
     app = Application.builder().token(settings.telegram_bot_token).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("objetivo", objetivo_command))
+    app.add_handler(CommandHandler("hoy", hoy_command))
+    app.add_handler(CommandHandler("entrenos", entrenos_command))
+    app.add_handler(CommandHandler("grafico", grafico_command))
     app.add_handler(CommandHandler("reporte", reporte_command))
     app.add_handler(CommandHandler("semana", semana_command))
     app.add_handler(CommandHandler("sincronizar", sincronizar_command))

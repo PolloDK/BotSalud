@@ -12,6 +12,7 @@ def test_generate_weekly_report_for_all_users():
     mock_snapshots = [{"date": "2026-08-24", "weight_kg": 80.5, "steps": 8000}]
     with patch("services.report_service.get_db") as mock_db, \
          patch("services.report_service.get_snapshots_range", return_value=mock_snapshots), \
+         patch("services.report_service.get_workouts_range", return_value=[]), \
          patch("services.report_service.generate_report", return_value="📊 Reporte..."), \
          patch("services.report_service.send_message", new_callable=AsyncMock) as mock_send:
         mock_db.return_value.table.return_value.select.return_value.execute.return_value.data = mock_users

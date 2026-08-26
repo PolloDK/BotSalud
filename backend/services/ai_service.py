@@ -42,15 +42,19 @@ def answer_question(question: str, snapshots: list, history: list, objective: st
     )
     return response.choices[0].message.content
 
-def generate_report(snapshots: list, objective: str, target_weight: float | None, target_date: str | None) -> str:
+def generate_report(snapshots: list, objective: str, target_weight: float | None, target_date: str | None, workouts: list | None = None) -> str:
     data_summary = json.dumps(snapshots, ensure_ascii=False, default=str)
+    workouts_summary = json.dumps(workouts or [], ensure_ascii=False, default=str)
     prompt = f"""Genera un reporte semanal de salud completo y motivador para el usuario.
 
 Objetivo: {objective}
 Peso objetivo: {target_weight} kg para {target_date}
 
-Datos de la semana:
+Datos de la semana (health_snapshots):
 {data_summary}
+
+Entrenamientos de la semana (workouts; 'detail' trae series/reps/peso de Hevy):
+{workouts_summary}
 
 El reporte debe incluir (en este orden):
 1. 📊 Progreso de peso y composición corporal (vs objetivo y vs semana anterior)

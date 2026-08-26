@@ -67,6 +67,17 @@ def get_workouts_range(user_id: str, start: date, end: date) -> list:
         .data
     )
 
+def get_recent_workouts(user_id: str, limit: int = 10) -> list:
+    return (
+        get_db().table("workouts")
+        .select("date,source,exercise_type,title,duration_min")
+        .eq("user_id", user_id)
+        .order("date", desc=True)
+        .limit(limit)
+        .execute()
+        .data
+    )
+
 def save_message(user_id: str, role: str, content: str) -> None:
     get_db().table("messages").insert({"user_id": user_id, "role": role, "content": content}).execute()
 

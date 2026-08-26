@@ -77,3 +77,14 @@ def test_get_workouts_range(mock_db):
         result = get_workouts_range("user-uuid", date(2026, 8, 1), date(2026, 8, 26))
     assert result[0]["title"] == "Leg Day"
     mock_db.table.assert_called_with("workouts")
+
+
+def test_get_recent_workouts(mock_db):
+    from services.health_data import get_recent_workouts
+    mock_db.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = [
+        {"date": "2026-08-24", "title": "Leg Day", "duration_min": 48, "source": "com.hevy"}
+    ]
+    with patch("services.health_data.get_db", return_value=mock_db):
+        result = get_recent_workouts("user-uuid", limit=10)
+    assert result[0]["title"] == "Leg Day"
+    mock_db.table.assert_called_with("workouts")
