@@ -33,3 +33,36 @@ def test_get_snapshots_range(mock_db):
     with patch("services.health_data.get_db", return_value=mock_db):
         result = get_snapshots_range("user-uuid", date(2026, 8, 17), date(2026, 8, 24))
     assert result == []
+
+def test_upsert_snapshot_excludes_workouts(mock_db):
+    from services.health_data import upsert_snapshot
+    from models import HealthSyncPayload, WorkoutIn
+    payload = HealthSyncPayload(date=date(2026, 8, 24), steps=8000,
+                                workouts=[WorkoutIn(hc_id="abc")])
+    captured = {}
+    def _upsert(data, on_conflict=None):
+        captured["data"] = data
+        m = MagicMock(); m.execute.return_value.data = [{"id": "uuid-1"}]; return m
+    mock_db.table.return_value.upsert.side_effect = _upsert
+    with patch("services.health_data.get_db", return_value=mock_db):
+        upsert_snapshot("user-uuid", payload)
+    assert "workouts" not in captured["data"]  # must not go into health_snapshots
+    assert captured["data"]["steps"] == 8000
+
+def test_upsert_workouts(mock_db):
+    from services.health_data import upsert_workouts
+    from models import WorkoutIn
+    from datetime import date
+    captured = {}
+    def _upsert(rows, on_conflict=None):
+        captured["rows"] = rows; captured["on_conflict"] = on_conflict
+        m = MagicMock(); m.execute.return_value.data = [{"id": "w1"}]; return m
+    mock_db.table.return_value.upsert.side_effect = _upsert
+    with patch("services.health_data.get_db", return_value=mock_db):
+        upsert_workouts("user-uuid", date(2026, 8, 24),
+                        [WorkoutIn(hc_id="abc", title="Pull Day")])
+    assert captured["on_conflict"] == "user_id,hc_uuid"
+    assert captured["rows"][0]["hc_uuid"] == "abc"
+    assert captured["rows"][0]["user_id"] == "user-uuid"
+    assert captured["rows"][0]["date"] == "2026-08-24"
+    assert "hc_id" not in captured["rows"][0]

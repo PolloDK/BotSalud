@@ -4,10 +4,26 @@ from database import get_db
 from models import HealthSyncPayload
 
 def upsert_snapshot(user_id: str, payload: HealthSyncPayload) -> list:
-    data = payload.model_dump(exclude_none=True)
+    data = payload.model_dump(exclude_none=True, exclude={"workouts"})
     data["user_id"] = user_id
     data["date"] = str(data["date"])
     return get_db().table("health_snapshots").upsert(data, on_conflict="user_id,date").execute().data
+
+def upsert_workouts(user_id: str, day, workouts: list) -> list:
+    if not workouts:
+        return []
+    rows = []
+    for w in workouts:
+        row = w.model_dump(exclude_none=True)
+        row["hc_uuid"] = row.pop("hc_id")
+        row["user_id"] = user_id
+        row["date"] = str(day)
+        if row.get("start_time"):
+            row["start_time"] = str(row["start_time"])
+        if row.get("end_time"):
+            row["end_time"] = str(row["end_time"])
+        rows.append(row)
+    return get_db().table("workouts").upsert(rows, on_conflict="user_id,hc_uuid").execute().data
 
 def get_user_by_token(token: str) -> dict | None:
     return get_db().table("users").select("*").eq("auth_token", token).single().execute().data
