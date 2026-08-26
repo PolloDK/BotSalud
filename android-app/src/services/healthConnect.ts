@@ -1,9 +1,12 @@
 import { initialize, readRecords, getGrantedPermissions } from 'react-native-health-connect';
 import type { HealthPayload } from './api';
 
-// How many days back to sync (today + previous days) so that occasional missed
-// syncs self-heal. Each day is read and stored as its OWN row — never summed together.
-export const DAYS_TO_SYNC = 3;
+// Rolling window synced on every run so recent days self-heal. Each day is read
+// and stored as its OWN row — never summed together.
+export const DAYS_TO_SYNC = 4;
+
+// One-time historical backfill window (~a bit over a month) run on first sync.
+export const BACKFILL_DAYS = 35;
 
 // Local YYYY-MM-DD (NOT UTC) so the row's date matches the user's calendar day.
 const localDateStr = (d: Date): string => {
