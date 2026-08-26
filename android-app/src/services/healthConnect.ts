@@ -73,21 +73,27 @@ const readDayData = async (win: { start: string; end: string; date: string }): P
 
   const [
     // Samples: not summed, so multiple sources don't inflate — averaged from records.
-    weightRecs, bodyFatRecs, leanMassRecs, restingHRRecs, exerciseRecs,
+    weightRecs, bodyFatRecs, leanMassRecs, restingHRRecs, exerciseRecs, sleepRecs,
     // Cumulative: aggregated (deduplicated across apps) — see safeAggregate.
     stepsAgg, activeCalAgg, totalCalAgg, sleepAgg, exerciseAgg, nutritionAgg,
+    hrAgg, distanceAgg, floorsAgg, elevationAgg,
   ] = await Promise.all([
     safeRead('Weight', timeRangeFilter),
     safeRead('BodyFat', timeRangeFilter),
     safeRead('LeanBodyMass', timeRangeFilter),
     safeRead('RestingHeartRate', timeRangeFilter),
     safeRead('ExerciseSession', timeRangeFilter),
+    safeRead('SleepSession', timeRangeFilter),
     safeAggregate('Steps', timeRangeFilter),
     safeAggregate('ActiveCaloriesBurned', timeRangeFilter),
     safeAggregate('TotalCaloriesBurned', timeRangeFilter),
     safeAggregate('SleepSession', timeRangeFilter),
     safeAggregate('ExerciseSession', timeRangeFilter),
     safeAggregate('Nutrition', timeRangeFilter),
+    safeAggregate('HeartRate', timeRangeFilter),
+    safeAggregate('Distance', timeRangeFilter),
+    safeAggregate('FloorsClimbed', timeRangeFilter),
+    safeAggregate('ElevationGained', timeRangeFilter),
   ]);
 
   const payload: HealthPayload = { date };
@@ -131,6 +137,68 @@ const readDayData = async (win: { start: string; end: string; date: string }): P
     if (carbs != null) payload.carbs_g = Math.round(carbs * 10) / 10;
     if (fat != null) payload.fat_g = Math.round(fat * 10) / 10;
   }
+
+  // Heart rate (deduplicated aggregate)
+  const hrAvg = hrAgg?.BPM_AVG;
+  if (hrAvg) payload.hr_avg = Math.round(hrAvg);
+  const hrMin = hrAgg?.BPM_MIN;
+  if (hrMin) payload.hr_min = Math.round(hrMin);
+  const hrMax = hrAgg?.BPM_MAX;
+  if (hrMax) payload.hr_max = Math.round(hrMax);
+
+  // Activity
+  const distanceKm = distanceAgg?.DISTANCE?.inKilometers;
+  if (distanceKm) payload.distance_km = Math.round(distanceKm * 100) / 100;
+  const floors = floorsAgg?.FLOORS_CLIMBED_TOTAL;
+  if (floors) payload.floors = Math.round(floors);
+  const elevationM = elevationAgg?.ELEVATION_GAINED_TOTAL?.inMeters;
+  if (elevationM) payload.elevation_m = Math.round(elevationM * 10) / 10;
+
+  // Sleep stages (deep=5, rem=6, light=4) summed from session stages
+  const stageHours = (stageType: number): number => {
+    let ms = 0;
+    for (const rec of sleepRecs.records) {
+      for (const st of (rec.stages ?? [])) {
+        if (st.stage === stageType) {
+          ms += new Date(st.endTime).getTime() - new Date(st.startTime).getTime();
+        }
+      }
+    }
+    return Math.round((ms / 3600000) * 10) / 10;
+  };
+  const deep = stageHours(5);
+  if (deep) payload.sleep_deep_h = deep;
+  const rem = stageHours(6);
+  if (rem) payload.sleep_rem_h = rem;
+  const light = stageHours(4);
+  if (light) payload.sleep_light_h = light;
+
+  // Nutrition extras (in the existing nutrition block, alongside protein/carbs/fat)
+  const fiber = nutritionAgg?.DIETARY_FIBER_TOTAL?.inGrams;
+  if (fiber != null) payload.fiber_g = Math.round(fiber * 10) / 10;
+  const sugar = nutritionAgg?.SUGAR_TOTAL?.inGrams;
+  if (sugar != null) payload.sugar_g = Math.round(sugar * 10) / 10;
+  const sodium = nutritionAgg?.SODIUM_TOTAL?.inMilligrams;
+  if (sodium != null) payload.sodium_mg = Math.round(sodium * 10) / 10;
+  const satFat = nutritionAgg?.SATURATED_FAT_TOTAL?.inGrams;
+  if (satFat != null) payload.sat_fat_g = Math.round(satFat * 10) / 10;
+
+  // Workouts: one entry per ExerciseSession record
+  const workouts = exerciseRecs.records
+    .map((r: any) => ({
+      hc_id: r.metadata?.id,
+      source: r.metadata?.dataOrigin,
+      exercise_type: r.exerciseType,
+      title: r.title || undefined,
+      detail: r.notes || undefined,
+      start_time: r.startTime,
+      end_time: r.endTime,
+      duration_min: (r.startTime && r.endTime)
+        ? Math.round((new Date(r.endTime).getTime() - new Date(r.startTime).getTime()) / 60000)
+        : undefined,
+    }))
+    .filter((w: any) => w.hc_id);
+  if (workouts.length) payload.workouts = workouts;
 
   return payload;
 };
