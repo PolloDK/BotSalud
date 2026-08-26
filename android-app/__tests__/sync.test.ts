@@ -30,7 +30,7 @@ beforeEach(() => {
   mockBackfillVersion.mockResolvedValue(2); // backfill already at current version
 });
 
-it('reads data and posts one payload per day when token exists', async () => {
+it('posts one payload per day, newest day first', async () => {
   mockGetToken.mockResolvedValue('valid-token');
   mockRead.mockResolvedValue([
     { date: '2026-08-23', steps: 5000 },
@@ -38,10 +38,30 @@ it('reads data and posts one payload per day when token exists', async () => {
   ]);
   mockPost.mockResolvedValue(undefined);
   const result = await runSync();
-  expect(result).toMatchObject({ status: 'success', hcFields: 2 });
+  expect(result).toMatchObject({ status: 'success', hcFields: 2, daysPosted: 2, daysFailed: 0 });
   expect(mockPost).toHaveBeenCalledTimes(2);
-  expect(mockPost).toHaveBeenNthCalledWith(1, 'valid-token', { date: '2026-08-23', steps: 5000 });
-  expect(mockPost).toHaveBeenNthCalledWith(2, 'valid-token', { date: '2026-08-24', weight_kg: 80.5 });
+  // newest (08-24) posted first for resilience
+  expect(mockPost).toHaveBeenNthCalledWith(1, 'valid-token', { date: '2026-08-24', weight_kg: 80.5 });
+  expect(mockPost).toHaveBeenNthCalledWith(2, 'valid-token', { date: '2026-08-23', steps: 5000 });
+});
+
+it('keeps posting remaining days when one day fails, and does not record version', async () => {
+  mockGetToken.mockResolvedValue('valid-token');
+  mockBackfillVersion.mockResolvedValue(1); // behind -> backfill run
+  mockRead.mockResolvedValue([
+    { date: '2026-08-22', steps: 1 },
+    { date: '2026-08-23', steps: 2 },
+    { date: '2026-08-24', steps: 3 },
+  ]);
+  // fail the middle post only
+  mockPost
+    .mockResolvedValueOnce(undefined)      // 08-24
+    .mockRejectedValueOnce(new Error('x')) // 08-23 fails
+    .mockResolvedValueOnce(undefined);     // 08-22
+  const result = await runSync();
+  expect(result).toMatchObject({ status: 'success', daysPosted: 2, daysFailed: 1 });
+  expect(mockPost).toHaveBeenCalledTimes(3);            // did not abort on failure
+  expect(mockSetBackfill).not.toHaveBeenCalled();       // partial -> retry next time
 });
 
 it('returns no-token when token not set', async () => {

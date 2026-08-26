@@ -25,6 +25,7 @@ export interface HealthPayload {
 export const syncHealthData = (token: string, payload: HealthPayload): Promise<void> =>
   axios.post(`${BASE_URL}/sync`, payload, {
     headers: { Authorization: `Bearer ${token}` },
+    timeout: 20000,
   });
 
 export const checkSyncPending = async (token: string): Promise<boolean> => {

@@ -81,11 +81,12 @@ export default function SetupScreen() {
 
   const formatSyncMsg = (result: any): string => {
     if (result.status === 'success') {
-      const fields = result.hcFields ?? 0;
-      const hcErr = result.hcError ? ` (HC error: ${result.hcError})` : '';
-      return fields > 0
-        ? `✅ Sincronizado — ${fields} métricas enviadas`
-        : `⚠️ Sincronizado sin datos de Health Connect${hcErr}`;
+      const days = result.daysPosted ?? 0;
+      const failed = result.daysFailed ?? 0;
+      const base = days > 0
+        ? `✅ Sincronizado — ${days} día${days === 1 ? '' : 's'} (${result.hcFields ?? 0} métricas)`
+        : '⚠️ Sincronizado sin datos de Health Connect';
+      return failed > 0 ? `${base} · ${failed} con error, se reintentarán` : base;
     }
     if (result.status === 'no-token') return '❌ Token no configurado';
     return `❌ Error: ${result.message ?? 'desconocido'}`;
