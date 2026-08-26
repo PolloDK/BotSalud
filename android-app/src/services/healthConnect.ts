@@ -1,14 +1,32 @@
 import { initialize, readRecords, getGrantedPermissions } from 'react-native-health-connect';
 import type { HealthPayload } from './api';
 
-// Read the last 48h so we catch data synced today AND yesterday
-const recentWindow = (): { start: string; end: string; date: string } => {
-  const end = new Date();
-  const start = new Date(end.getTime() - 48 * 60 * 60 * 1000);
-  start.setHours(0, 0, 0, 0);
-  const date = new Date().toISOString().slice(0, 10);
-  return { start: start.toISOString(), end: end.toISOString(), date };
+// How many days back to sync (today + previous days) so that occasional missed
+// syncs self-heal. Each day is read and stored as its OWN row — never summed together.
+export const DAYS_TO_SYNC = 3;
+
+// Local YYYY-MM-DD (NOT UTC) so the row's date matches the user's calendar day.
+const localDateStr = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
+
+// Time window for a single local calendar day `daysAgo` days before today.
+// Boundaries are local midnight -> next local midnight (end clamped to "now" for today).
+const dayWindow = (daysAgo: number): { start: string; end: string; date: string } => {
+  const now = new Date();
+  const dayStart = new Date(now);
+  dayStart.setDate(now.getDate() - daysAgo);
+  dayStart.setHours(0, 0, 0, 0);
+  const nextDay = new Date(dayStart);
+  nextDay.setDate(dayStart.getDate() + 1);
+  const end = nextDay.getTime() > now.getTime() ? now : nextDay;
+  return { start: dayStart.toISOString(), end: end.toISOString(), date: localDateStr(dayStart) };
+};
+
+export const todayLocalDate = (): string => localDateStr(new Date());
 
 const avg = (nums: number[]): number | undefined =>
   nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : undefined;
@@ -30,9 +48,9 @@ const safeRead = async (type: string, filter: any): Promise<{ records: any[] }> 
   }
 };
 
-export const readYesterdayData = async (): Promise<HealthPayload> => {
-  await initialize();
-  const { start, end, date } = recentWindow();
+// Read and aggregate a SINGLE local day into one payload.
+const readDayData = async (win: { start: string; end: string; date: string }): Promise<HealthPayload> => {
+  const { start, end, date } = win;
   const timeRangeFilter = { operator: 'between' as const, startTime: start, endTime: end };
 
   const [
@@ -105,4 +123,15 @@ export const readYesterdayData = async (): Promise<HealthPayload> => {
   }
 
   return payload;
+};
+
+// Read the last `numDays` local days, one payload per day (oldest first).
+// Each day is scoped by its own time window, so days are NEVER summed together.
+export const readRecentDays = async (numDays: number = DAYS_TO_SYNC): Promise<HealthPayload[]> => {
+  await initialize();
+  const payloads: HealthPayload[] = [];
+  for (let daysAgo = numDays - 1; daysAgo >= 0; daysAgo--) {
+    payloads.push(await readDayData(dayWindow(daysAgo)));
+  }
+  return payloads;
 };
