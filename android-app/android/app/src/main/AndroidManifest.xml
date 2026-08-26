@@ -20,11 +20,15 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
-    <!-- Required to start the Health Connect permissions flow -->
+    <!-- Required so the app can see/launch the Health Connect permission + rationale flows -->
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
         <intent>
             <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+            <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
         </intent>
     </queries>
 
@@ -48,17 +52,24 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <!-- Android 13 and lower: show the Health Connect permissions rationale (privacy policy) -->
+        <intent-filter>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent-filter>
       </activity>
 
-      <!-- Activity provided by react-native-health-connect to handle the permissions dialog -->
-      <activity
-          android:name="dev.matinzd.healthconnect.permissions.HealthConnectPermissionActivity"
+      <!-- Android 14+ (targetSdk 34+): Health Connect lives in the system Settings and REQUIRES
+           this activity-alias to recognise the app; without it the permission sheet never appears -->
+      <activity-alias
+          android:name="ViewPermissionUsageActivity"
           android:exported="true"
-          android:theme="@android:style/Theme.Translucent.NoTitleBar">
+          android:targetActivity=".MainActivity"
+          android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
           <intent-filter>
-              <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+              <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+              <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
           </intent-filter>
-      </activity>
+      </activity-alias>
 
       <meta-data
           android:name="health_permissions"

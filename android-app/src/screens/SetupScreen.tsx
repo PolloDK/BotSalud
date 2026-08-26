@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  SafeAreaView, ActivityIndicator, Alert, ScrollView, AppState, NativeModules,
+  SafeAreaView, ActivityIndicator, Alert, ScrollView, AppState,
 } from 'react-native';
 
-const { HealthConnectSettings } = NativeModules;
-import { initialize, requestPermission } from 'react-native-health-connect';
+import { initialize, requestPermission, openHealthConnectSettings } from 'react-native-health-connect';
 import { getToken, saveToken } from '../storage';
 import { configureBackgroundSync } from '../backgroundTask';
 import { runSync } from '../services/sync';
@@ -226,7 +225,7 @@ export default function SetupScreen() {
               <TouchableOpacity
                 style={styles.buttonOutline}
                 onPress={() => {
-                  HealthConnectSettings?.openPermissions?.();
+                  try { openHealthConnectSettings(); } catch {}
                   setTimeout(refreshPerms, 3000);
                 }}
               >

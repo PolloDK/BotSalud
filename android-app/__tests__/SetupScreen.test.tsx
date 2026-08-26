@@ -12,6 +12,8 @@ jest.mock('../src/services/sync', () => ({
 jest.mock('react-native-health-connect', () => ({
   initialize: jest.fn(() => Promise.resolve(true)),
   requestPermission: jest.fn(() => Promise.resolve([])),
+  getGrantedPermissions: jest.fn(() => Promise.resolve([])),
+  openHealthConnectSettings: jest.fn(),
 }));
 jest.mock('../src/backgroundTask', () => ({
   configureBackgroundSync: jest.fn(() => Promise.resolve()),
