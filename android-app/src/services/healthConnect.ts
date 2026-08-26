@@ -10,7 +10,8 @@ export const BACKFILL_DAYS = 35;
 
 // Bump when the aggregation logic changes so a corrected backfill re-runs once
 // and overwrites previously-stored (wrong) history. v2 = dedup via aggregate API.
-export const BACKFILL_VERSION = 2;
+// v3 = rich metrics + workouts.
+export const BACKFILL_VERSION = 3;
 
 // Local YYYY-MM-DD (NOT UTC) so the row's date matches the user's calendar day.
 const localDateStr = (d: Date): string => {

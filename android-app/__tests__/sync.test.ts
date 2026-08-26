@@ -3,7 +3,7 @@ jest.mock('../src/services/healthConnect', () => ({
   todayLocalDate: jest.fn(() => '2026-08-24'),
   DAYS_TO_SYNC: 4,
   BACKFILL_DAYS: 35,
-  BACKFILL_VERSION: 2,
+  BACKFILL_VERSION: 3,
 }));
 jest.mock('../src/services/api', () => ({
   syncHealthData: jest.fn(),
@@ -27,7 +27,7 @@ const mockSetBackfill = setBackfillVersion as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockBackfillVersion.mockResolvedValue(2); // backfill already at current version
+  mockBackfillVersion.mockResolvedValue(3); // backfill already at current version
 });
 
 it('posts one payload per day, newest day first', async () => {
@@ -81,17 +81,17 @@ it('returns error when API call fails', async () => {
 
 it('re-backfills the full window when stored version is behind, then records version', async () => {
   mockGetToken.mockResolvedValue('valid-token');
-  mockBackfillVersion.mockResolvedValue(1); // older than current (2) -> re-backfill
+  mockBackfillVersion.mockResolvedValue(2); // older than current (3) -> re-backfill
   mockRead.mockResolvedValue([{ date: '2026-07-25', steps: 100 }]);
   mockPost.mockResolvedValue(undefined);
   await runSync();
   expect(mockRead).toHaveBeenCalledWith(BACKFILL_DAYS);
-  expect(mockSetBackfill).toHaveBeenCalledWith(2);
+  expect(mockSetBackfill).toHaveBeenCalledWith(3);
 });
 
 it('uses the short rolling window once backfill version is current', async () => {
   mockGetToken.mockResolvedValue('valid-token');
-  mockBackfillVersion.mockResolvedValue(2);
+  mockBackfillVersion.mockResolvedValue(3);
   mockRead.mockResolvedValue([{ date: '2026-08-24' }]);
   mockPost.mockResolvedValue(undefined);
   await runSync();
