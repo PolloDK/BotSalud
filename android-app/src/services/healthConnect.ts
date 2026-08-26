@@ -1,4 +1,4 @@
-import { initialize, readRecords, getGrantedPermissions } from 'react-native-health-connect';
+import { initialize, readRecords, getGrantedPermissions, aggregateRecord } from 'react-native-health-connect';
 import type { HealthPayload } from './api';
 
 // Rolling window synced on every run so recent days self-heal. Each day is read
@@ -7,6 +7,10 @@ export const DAYS_TO_SYNC = 4;
 
 // One-time historical backfill window (~a bit over a month) run on first sync.
 export const BACKFILL_DAYS = 35;
+
+// Bump when the aggregation logic changes so a corrected backfill re-runs once
+// and overwrites previously-stored (wrong) history. v2 = dedup via aggregate API.
+export const BACKFILL_VERSION = 2;
 
 // Local YYYY-MM-DD (NOT UTC) so the row's date matches the user's calendar day.
 const localDateStr = (d: Date): string => {
@@ -51,26 +55,39 @@ const safeRead = async (type: string, filter: any): Promise<{ records: any[] }> 
   }
 };
 
+// Aggregate a cumulative metric. Health Connect's aggregate API DEDUPLICATES
+// overlapping data written by multiple apps (Garmin, Samsung Health, Strava, ...)
+// using its per-type priority list — so totals aren't double/triple counted.
+const safeAggregate = async (type: string, filter: any): Promise<any | null> => {
+  try {
+    return await aggregateRecord({ recordType: type as any, timeRangeFilter: filter } as any);
+  } catch {
+    return null;
+  }
+};
+
 // Read and aggregate a SINGLE local day into one payload.
 const readDayData = async (win: { start: string; end: string; date: string }): Promise<HealthPayload> => {
   const { start, end, date } = win;
   const timeRangeFilter = { operator: 'between' as const, startTime: start, endTime: end };
 
   const [
-    weightRecs, bodyFatRecs, leanMassRecs,
-    stepsRecs, activeCalRecs, totalCalRecs,
-    restingHRRecs, sleepRecs, exerciseRecs, nutritionRecs,
+    // Samples: not summed, so multiple sources don't inflate — averaged from records.
+    weightRecs, bodyFatRecs, leanMassRecs, restingHRRecs, exerciseRecs,
+    // Cumulative: aggregated (deduplicated across apps) — see safeAggregate.
+    stepsAgg, activeCalAgg, totalCalAgg, sleepAgg, exerciseAgg, nutritionAgg,
   ] = await Promise.all([
     safeRead('Weight', timeRangeFilter),
     safeRead('BodyFat', timeRangeFilter),
     safeRead('LeanBodyMass', timeRangeFilter),
-    safeRead('Steps', timeRangeFilter),
-    safeRead('ActiveCaloriesBurned', timeRangeFilter),
-    safeRead('TotalCaloriesBurned', timeRangeFilter),
     safeRead('RestingHeartRate', timeRangeFilter),
-    safeRead('SleepSession', timeRangeFilter),
     safeRead('ExerciseSession', timeRangeFilter),
-    safeRead('Nutrition', timeRangeFilter),
+    safeAggregate('Steps', timeRangeFilter),
+    safeAggregate('ActiveCaloriesBurned', timeRangeFilter),
+    safeAggregate('TotalCaloriesBurned', timeRangeFilter),
+    safeAggregate('SleepSession', timeRangeFilter),
+    safeAggregate('ExerciseSession', timeRangeFilter),
+    safeAggregate('Nutrition', timeRangeFilter),
   ]);
 
   const payload: HealthPayload = { date };
@@ -84,45 +101,35 @@ const readDayData = async (win: { start: string; end: string; date: string }): P
   const lean = leanMassRecs.records.map((r: any) => r.mass?.inKilograms).filter(Boolean);
   if (lean.length) payload.lean_mass_kg = avg(lean);
 
-  const steps = stepsRecs.records.map((r: any) => r.count).filter(Boolean);
-  payload.steps = sum(steps);
-
-  const activeCal = activeCalRecs.records.map((r: any) => r.energy?.inKilocalories).filter(Boolean);
-  payload.active_cal = sum(activeCal) ? Math.round(sum(activeCal)!) : undefined;
-
-  const totalCal = totalCalRecs.records.map((r: any) => r.energy?.inKilocalories).filter(Boolean);
-  payload.total_cal = sum(totalCal) ? Math.round(sum(totalCal)!) : undefined;
-
   const hr = restingHRRecs.records.map((r: any) => r.beatsPerMinute).filter(Boolean);
   if (hr.length) payload.resting_hr = Math.round(avg(hr)!);
 
-  if (sleepRecs.records.length) {
-    const totalMs = sleepRecs.records.reduce((acc: number, r: any) => {
-      return acc + (new Date(r.endTime).getTime() - new Date(r.startTime).getTime());
-    }, 0);
-    payload.sleep_hours = Math.round((totalMs / 3600000) * 10) / 10;
-  }
+  const steps = stepsAgg?.COUNT_TOTAL;
+  if (steps) payload.steps = Math.round(steps);
 
-  if (exerciseRecs.records.length) {
-    payload.workout_count = exerciseRecs.records.length;
-    const totalExerciseMs = exerciseRecs.records.reduce((acc: number, r: any) => {
-      return acc + (new Date(r.endTime).getTime() - new Date(r.startTime).getTime());
-    }, 0);
-    payload.workout_minutes = Math.round(totalExerciseMs / 60000);
-  }
+  const activeCal = activeCalAgg?.ACTIVE_CALORIES_TOTAL?.inKilocalories;
+  if (activeCal) payload.active_cal = Math.round(activeCal);
 
-  if (nutritionRecs.records.length) {
-    const cals = nutritionRecs.records.map((r: any) => r.energy?.inKilocalories || 0);
-    const prot = nutritionRecs.records.map((r: any) => r.protein?.inGrams || 0);
-    const carbs = nutritionRecs.records.map((r: any) => r.totalCarbohydrate?.inGrams || 0);
-    const fat = nutritionRecs.records.map((r: any) => r.totalFat?.inGrams || 0);
-    const totalCalsIn = cals.reduce((a: number, b: number) => a + b, 0);
-    if (totalCalsIn > 0) {
-      payload.calories_in = Math.round(totalCalsIn);
-      payload.protein_g = Math.round(prot.reduce((a: number, b: number) => a + b, 0) * 10) / 10;
-      payload.carbs_g = Math.round(carbs.reduce((a: number, b: number) => a + b, 0) * 10) / 10;
-      payload.fat_g = Math.round(fat.reduce((a: number, b: number) => a + b, 0) * 10) / 10;
-    }
+  const totalCal = totalCalAgg?.ENERGY_TOTAL?.inKilocalories;
+  if (totalCal) payload.total_cal = Math.round(totalCal);
+
+  const sleepSeconds = sleepAgg?.SLEEP_DURATION_TOTAL;
+  if (sleepSeconds) payload.sleep_hours = Math.round((sleepSeconds / 3600) * 10) / 10;
+
+  const exerciseSeconds = exerciseAgg?.EXERCISE_DURATION_TOTAL;
+  if (exerciseSeconds) payload.workout_minutes = Math.round(exerciseSeconds / 60);
+  // Count of sessions has no dedup aggregate; approximate from records.
+  if (exerciseRecs.records.length) payload.workout_count = exerciseRecs.records.length;
+
+  const caloriesIn = nutritionAgg?.ENERGY_TOTAL?.inKilocalories;
+  if (caloriesIn && caloriesIn > 0) {
+    payload.calories_in = Math.round(caloriesIn);
+    const prot = nutritionAgg?.PROTEIN_TOTAL?.inGrams;
+    const carbs = nutritionAgg?.TOTAL_CARBOHYDRATE_TOTAL?.inGrams;
+    const fat = nutritionAgg?.TOTAL_FAT_TOTAL?.inGrams;
+    if (prot != null) payload.protein_g = Math.round(prot * 10) / 10;
+    if (carbs != null) payload.carbs_g = Math.round(carbs * 10) / 10;
+    if (fat != null) payload.fat_g = Math.round(fat * 10) / 10;
   }
 
   return payload;
