@@ -11,5 +11,9 @@
         <item>androidx.health.permission.SleepSession.READ</item>
         <item>androidx.health.permission.ExerciseSession.READ</item>
         <item>androidx.health.permission.Nutrition.READ</item>
+        <item>androidx.health.permission.HeartRate.READ</item>
+        <item>androidx.health.permission.Distance.READ</item>
+        <item>androidx.health.permission.FloorsClimbed.READ</item>
+        <item>androidx.health.permission.ElevationGained.READ</item>
     </array>
 </resources>

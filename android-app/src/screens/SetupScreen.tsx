@@ -22,9 +22,13 @@ const PERMISSIONS = [
   { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
   { accessType: 'read', recordType: 'TotalCaloriesBurned' },
   { accessType: 'read', recordType: 'RestingHeartRate' },
+  { accessType: 'read', recordType: 'HeartRate' },
   { accessType: 'read', recordType: 'SleepSession' },
   { accessType: 'read', recordType: 'ExerciseSession' },
   { accessType: 'read', recordType: 'Nutrition' },
+  { accessType: 'read', recordType: 'Distance' },
+  { accessType: 'read', recordType: 'FloorsClimbed' },
+  { accessType: 'read', recordType: 'ElevationGained' },
 ];
 
 const REQUIRED_TYPES = PERMISSIONS.map(p => p.recordType);
