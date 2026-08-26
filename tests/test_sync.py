@@ -24,7 +24,8 @@ def test_sync_invalid_token_returns_401(client):
 def test_sync_valid_request_returns_200(client):
     mock_user = {"id": "user-uuid", "telegram_id": 123}
     with patch("routers.sync.get_user_by_token", return_value=mock_user), \
-         patch("routers.sync.upsert_snapshot", return_value=[{"id": "snap-uuid"}]):
+         patch("routers.sync.upsert_snapshot", return_value=[{"id": "snap-uuid"}]), \
+         patch("routers.sync.clear_sync_request"):
         response = client.post(
             "/sync",
             json={"date": "2026-08-24", "weight_kg": 80.5, "steps": 8000},

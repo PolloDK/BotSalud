@@ -8,19 +8,36 @@ client = OpenAI(api_key=settings.openai_api_key)
 SYSTEM_PROMPT = """Eres un asistente de salud personal experto en nutrición, entrenamiento y composición corporal.
 Tu usuario está en proceso de recomposición corporal. Responde siempre en español, de forma concisa y práctica.
 Usa los datos de salud del usuario para dar respuestas precisas y personalizadas.
-No inventes datos — si no tienes la información, dilo."""
+No inventes datos — si no tienes la información, dilo.
 
-def answer_question(question: str, snapshots: list, history: list, objective: str) -> str:
-    data_summary = json.dumps(snapshots[-7:], ensure_ascii=False, default=str)
+FORMATO (la respuesta se muestra en Telegram):
+- NO uses encabezados Markdown (#, ##, ###) ni negrita con doble asterisco (**). No se renderizan.
+- Marca las secciones con emojis relevantes: 📊 progreso, ❤️ corazón, 😴 sueño, 💪 entrenamiento, 🥗 nutrición, 🚶 actividad, 🎯 objetivo, ✅ bien, ⚠️ atención.
+- Negrita solo con UN asterisco: *texto*.
+- Listas con "• ".
+- Para comparaciones o datos por día/ejercicio, usa un bloque de código con ``` para alinear columnas en fuente monoespaciada (una tabla simple). Mantén las tablas angostas (≤ ~34 caracteres de ancho) para que se lean en el celular.
+- Sé visual y directo; nada de relleno."""
+
+def answer_question(question: str, snapshots: list, history: list, objective: str, workouts: list | None = None) -> str:
+    data_summary = json.dumps(snapshots[-14:], ensure_ascii=False, default=str)
+    workouts_summary = json.dumps(workouts or [], ensure_ascii=False, default=str)
+    context = (
+        f"{SYSTEM_PROMPT}\n\nObjetivo del usuario: {objective}\n\n"
+        f"Datos diarios recientes (health_snapshots, últimos 14 días):\n{data_summary}\n\n"
+        f"Entrenamientos recientes (workouts). El campo 'detail' trae el desglose completo de "
+        f"ejercicios/series/reps/peso cuando la fuente es Hevy (com.hevy); úsalo para comparar "
+        f"sesiones y progresión. Las sesiones de Garmin/Strava no traen detalle, solo tipo y duración:\n"
+        f"{workouts_summary}"
+    )
     messages = [
-        {"role": "system", "content": f"{SYSTEM_PROMPT}\n\nObjetivo del usuario: {objective}\n\nDatos recientes (últimos 7 días):\n{data_summary}"},
+        {"role": "system", "content": context},
         *history,
         {"role": "user", "content": question}
     ]
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages,
-        max_tokens=500,
+        max_tokens=800,
         temperature=0.7
     )
     return response.choices[0].message.content

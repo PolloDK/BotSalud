@@ -66,3 +66,14 @@ def test_upsert_workouts(mock_db):
     assert captured["rows"][0]["user_id"] == "user-uuid"
     assert captured["rows"][0]["date"] == "2026-08-24"
     assert "hc_id" not in captured["rows"][0]
+
+
+def test_get_workouts_range(mock_db):
+    from services.health_data import get_workouts_range
+    mock_db.table.return_value.select.return_value.eq.return_value.gte.return_value.lte.return_value.order.return_value.execute.return_value.data = [
+        {"date": "2026-08-24", "title": "Leg Day", "detail": "Squat 80x7"}
+    ]
+    with patch("services.health_data.get_db", return_value=mock_db):
+        result = get_workouts_range("user-uuid", date(2026, 8, 1), date(2026, 8, 26))
+    assert result[0]["title"] == "Leg Day"
+    mock_db.table.assert_called_with("workouts")

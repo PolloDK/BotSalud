@@ -23,6 +23,7 @@ async def test_free_text_question_gets_ai_response():
     mock_history = []
     with patch("bot.handlers.get_user_by_telegram_id", return_value=mock_user), \
          patch("bot.handlers.get_snapshots_range", return_value=mock_snapshots), \
+         patch("bot.handlers.get_workouts_range", return_value=[]), \
          patch("bot.handlers.get_recent_messages", return_value=mock_history), \
          patch("bot.handlers.answer_question", return_value="Comiste 2100 kcal ayer."), \
          patch("bot.handlers.save_message") as mock_save:
