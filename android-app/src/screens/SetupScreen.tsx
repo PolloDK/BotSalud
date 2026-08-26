@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  SafeAreaView, ActivityIndicator, Alert, ScrollView, AppState,
+  SafeAreaView, ActivityIndicator, Alert, ScrollView, AppState, Linking,
 } from 'react-native';
 
 import { initialize, requestPermission, openHealthConnectSettings } from 'react-native-health-connect';
@@ -10,6 +10,7 @@ import { configureBackgroundSync } from '../backgroundTask';
 import { runSync } from '../services/sync';
 import { checkGrantedPermissions } from '../services/healthConnect';
 import { checkSyncPending } from '../services/api';
+import { checkForUpdate, UpdateInfo } from '../services/updater';
 
 type Status = 'loading' | 'unconfigured' | 'configured';
 
@@ -36,6 +37,7 @@ export default function SetupScreen() {
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [requestingPerms, setRequestingPerms] = useState(false);
   const [grantedPerms, setGrantedPerms] = useState<string[] | null>(null);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function SetupScreen() {
       if (t) { setSavedToken(t); setStatus('configured'); refreshPerms(); }
       else setStatus('unconfigured');
     });
+    checkForUpdate().then(setUpdate);
   }, []);
 
   const refreshPerms = async () => {
@@ -156,6 +159,16 @@ export default function SetupScreen() {
           <Text style={styles.title}>BotSalud</Text>
           <Text style={styles.subtitle}>Tu asistente de salud inteligente</Text>
         </View>
+
+        {update?.available && (
+          <TouchableOpacity
+            style={styles.updateBanner}
+            onPress={() => { if (update.apkUrl) Linking.openURL(update.apkUrl); }}
+          >
+            <Text style={styles.updateTitle}>⬆️ Nueva versión disponible ({update.latestTag})</Text>
+            <Text style={styles.updateDesc}>Toca para descargar e instalar la actualización.</Text>
+          </TouchableOpacity>
+        )}
 
         {status === 'unconfigured' ? (
           <View style={styles.card}>
@@ -314,4 +327,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#444',
   },
   buttonOutlineText: { color: '#888', fontWeight: '600', fontSize: 14 },
+  updateBanner: {
+    backgroundColor: '#0D1F1A', borderRadius: 16, padding: 16, marginBottom: 16,
+    borderWidth: 1, borderColor: '#00E5A0',
+  },
+  updateTitle: { color: '#00E5A0', fontWeight: '700', fontSize: 14, marginBottom: 4 },
+  updateDesc: { color: '#999', fontSize: 13, lineHeight: 18 },
 });
